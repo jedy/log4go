@@ -10,8 +10,9 @@ import (
 
 // This log writer sends output to a file
 type FileLogWriter struct {
-	rec chan *LogRecord
-	rot chan bool
+	rec  chan *LogRecord
+	rot  chan bool
+	quit chan bool
 
 	// The opened file
 	filename string
@@ -46,7 +47,7 @@ func (w *FileLogWriter) LogWrite(rec *LogRecord) {
 
 func (w *FileLogWriter) Close() {
 	close(w.rec)
-	w.file.Sync()
+	<-w.quit
 }
 
 // NewFileLogWriter creates a new LogWriter which writes to the given file and
@@ -62,6 +63,7 @@ func NewFileLogWriter(fname string, rotate bool) *FileLogWriter {
 	w := &FileLogWriter{
 		rec:      make(chan *LogRecord, LogBufferLength),
 		rot:      make(chan bool),
+		quit:     make(chan bool, 1),
 		filename: fname,
 		format:   "[%D %T] [%L] (%S) %M",
 		rotate:   rotate,
@@ -79,6 +81,7 @@ func NewFileLogWriter(fname string, rotate bool) *FileLogWriter {
 				fmt.Fprint(w.file, FormatLogRecord(w.trailer, &LogRecord{Created: time.Now()}))
 				w.file.Close()
 			}
+			w.quit <- true
 		}()
 
 		for {
