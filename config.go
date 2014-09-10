@@ -173,7 +173,7 @@ func xmlToFileLogWriter(filename string, props []xmlProperty, enabled bool) (*Fi
 	maxlines := 0
 	maxsize := 0
 	daily := false
-	rotate := false
+	rotate := 0
 
 	// Parse properties
 	for _, prop := range props {
@@ -189,7 +189,7 @@ func xmlToFileLogWriter(filename string, props []xmlProperty, enabled bool) (*Fi
 		case "daily":
 			daily = strings.Trim(prop.Value, " \r\n") != "false"
 		case "rotate":
-			rotate = strings.Trim(prop.Value, " \r\n") != "false"
+			rotate, _ = strconv.Atoi(strings.Trim(prop.Value, " \r\n"))
 		default:
 			fmt.Fprintf(os.Stderr, "LoadConfiguration: Warning: Unknown property \"%s\" for file filter in %s\n", prop.Name, filename)
 		}
@@ -219,7 +219,7 @@ func xmlToXMLLogWriter(filename string, props []xmlProperty, enabled bool) (*Fil
 	maxrecords := 0
 	maxsize := 0
 	daily := false
-	rotate := false
+	rotate := 0
 
 	// Parse properties
 	for _, prop := range props {
@@ -233,7 +233,7 @@ func xmlToXMLLogWriter(filename string, props []xmlProperty, enabled bool) (*Fil
 		case "daily":
 			daily = strings.Trim(prop.Value, " \r\n") != "false"
 		case "rotate":
-			rotate = strings.Trim(prop.Value, " \r\n") != "false"
+			rotate, _ = strconv.Atoi(strings.Trim(prop.Value, " \r\n"))
 		default:
 			fmt.Fprintf(os.Stderr, "LoadConfiguration: Warning: Unknown property \"%s\" for xml filter in %s\n", prop.Name, filename)
 		}

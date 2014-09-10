@@ -36,8 +36,8 @@ type FileLogWriter struct {
 	daily          bool
 	daily_opendate int
 
-	// Keep old logfiles (.001, .002, etc)
-	rotate bool
+	// Total number of logfiles
+	rotate int
 }
 
 // This is the FileLogWriter's output method
@@ -53,13 +53,13 @@ func (w *FileLogWriter) Close() {
 // NewFileLogWriter creates a new LogWriter which writes to the given file and
 // has rotation enabled if rotate is true.
 //
-// If rotate is true, any time a new log file is opened, the old one is renamed
-// with a .### extension to preserve it.  The various Set* methods can be used
+// If rotate is greater than 0, any time a new log file is opened, the old one is renamed.
+// And total number of logs is rotate.  The various Set* methods can be used
 // to configure log rotation based on lines, size, and daily.
 //
 // The standard log-line format is:
 //   [%D %T] [%L] (%S) %M
-func NewFileLogWriter(fname string, rotate bool) *FileLogWriter {
+func NewFileLogWriter(fname string, rotate int) *FileLogWriter {
 	w := &FileLogWriter{
 		rec:      make(chan *LogRecord, LogBufferLength),
 		rot:      make(chan bool),
@@ -136,31 +136,31 @@ func (w *FileLogWriter) intRotate() error {
 	}
 
 	// If we are keeping log files, move it to the next available number
-	if w.rotate {
+	if w.rotate > 0 {
+		oldLogNum := w.rotate - 1
+		for n := oldLogNum - 1; n > 0; n-- {
+			oldFile := fmt.Sprintf("%s.%d", w.filename, n)
+			_, err := os.Lstat(oldFile)
+			if err == nil {
+				if n == oldLogNum {
+					err = os.Remove(oldFile)
+				} else {
+					err = os.Rename(oldFile, fmt.Sprintf("%s.%d", w.filename, n+1))
+				}
+				if err != nil {
+					return fmt.Errorf("Rotate: Cannot rotate old file %s: %s\n", oldFile, err)
+				}
+			}
+		}
+
 		_, err := os.Lstat(w.filename)
 		if err == nil { // file exists
-			// Find the next available number
-			num := 1
-			fname := ""
-			if w.daily && time.Now().Day() != w.daily_opendate {
-				yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-				for ; err == nil && num <= 999; num++ {
-					fname = w.filename + fmt.Sprintf(".%s.%03d", yesterday, num)
-					_, err = os.Lstat(fname)
-				}
+			if w.rotate > 1 {
+				fname := fmt.Sprintf("%s.%d", w.filename, 1)
+				err = os.Rename(w.filename, fname)
 			} else {
-				for ; err == nil && num <= 999; num++ {
-					fname = w.filename + fmt.Sprintf(".%s.%03d", time.Now().Format("2006-01-02"), num)
-					_, err = os.Lstat(fname)
-				}
+				err = os.Remove(w.filename)
 			}
-			// return error if the last file checked still existed
-			if err == nil {
-				return fmt.Errorf("Rotate: Cannot find free log number to rename %s\n", w.filename)
-			}
-			w.file.Close()
-			// Rename the file to its newfound home
-			err = os.Rename(w.filename, fname)
 			if err != nil {
 				return fmt.Errorf("Rotate: %s\n", err)
 			}
@@ -229,11 +229,11 @@ func (w *FileLogWriter) SetRotateDaily(daily bool) *FileLogWriter {
 	return w
 }
 
-// SetRotate changes whether or not the old logs are kept. (chainable) Must be
-// called before the first log message is written.  If rotate is false, the
-// files are overwritten; otherwise, they are rotated to another file before the
+// SetRotate changes how many logs are kept. (chainable) Must be
+// called before the first log message is written.  If rotate is 0, file is appended;
+// if rotate is 1, file is overwritten; otherwise, they are rotated to another file before the
 // new log is opened.
-func (w *FileLogWriter) SetRotate(rotate bool) *FileLogWriter {
+func (w *FileLogWriter) SetRotate(rotate int) *FileLogWriter {
 	//fmt.Fprintf(os.Stderr, "FileLogWriter.SetRotate: %v\n", rotate)
 	w.rotate = rotate
 	return w
@@ -241,7 +241,7 @@ func (w *FileLogWriter) SetRotate(rotate bool) *FileLogWriter {
 
 // NewXMLLogWriter is a utility method for creating a FileLogWriter set up to
 // output XML record log messages instead of line-based ones.
-func NewXMLLogWriter(fname string, rotate bool) *FileLogWriter {
+func NewXMLLogWriter(fname string, rotate int) *FileLogWriter {
 	return NewFileLogWriter(fname, rotate).SetFormat(
 		`	<record level="%L">
 		<timestamp>%D %T</timestamp>
