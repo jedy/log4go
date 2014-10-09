@@ -66,7 +66,7 @@ func NewFileLogWriter(fname string, rotate int) *FileLogWriter {
 		quit:     make(chan bool, 1),
 		filename: fname,
 		format:   "[%D %T] [%L] (%S) %M",
-		rotate:   rotate,
+		rotate:   0, // set to 0 to prevent rotating for the first time
 	}
 
 	// open the file for the first time
@@ -74,6 +74,7 @@ func NewFileLogWriter(fname string, rotate int) *FileLogWriter {
 		fmt.Fprintf(os.Stderr, "FileLogWriter(%q): %s\n", w.filename, err)
 		return nil
 	}
+	w.rotate = rotate
 
 	go func() {
 		defer func() {
